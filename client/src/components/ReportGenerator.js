@@ -10,7 +10,7 @@ const ReportGenerator = ({ onError, setLoading }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [includeSummaries, setIncludeSummaries] = useState(true);
   const [report, setReport] = useState(null);
-  const [loading, setLoadingLocal] = useState(false);
+  const [loadingLocal, setLoadingLocal] = useState(false);
 
   const topicOptions = [
     { value: 'medicine', label: 'AI in Medicine' },

@@ -16,11 +16,11 @@ const NewsDashboard = ({ onError, setLoading }) => {
   useEffect(() => {
     fetchTopics();
     fetchNews();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     filterArticles();
-  }, [articles, searchQuery]);
+  }, [articles, searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchTopics = async () => {
     try {

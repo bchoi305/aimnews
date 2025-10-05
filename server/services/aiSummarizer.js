@@ -2,27 +2,39 @@ const OpenAI = require('openai');
 
 class AISummarizer {
   constructor() {
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    this.apiKey = process.env.OPENAI_API_KEY;
+    this.openai = this.apiKey && this.apiKey.startsWith('sk-') ? new OpenAI({
+      apiKey: this.apiKey,
+    }) : null;
   }
 
   async summarizeArticle(article) {
+    // If OpenAI is not available, return a simple summary
+    if (!this.openai) {
+      return {
+        ...article,
+        summary: `AI-powered summary not available. Based on title: "${article.title}"`,
+        summarizedAt: new Date().toISOString()
+      };
+    }
+
     try {
+      // Use title as primary content since descriptions are empty
+      const content = article.description || article.title;
       const prompt = `Please provide a concise summary of the following article about AI in medicine/radiology/cardiovascular imaging:
 
 Title: ${article.title}
-Description: ${article.description}
+Content: ${content}
 Source: ${article.source}
 
-Focus on the key findings, innovations, and implications for the medical field. Keep the summary to 2-3 sentences.`;
+Based on the title and available information, provide a 2-3 sentence summary focusing on the key AI applications, innovations, or implications for the medical field.`;
 
       const response = await this.openai.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [
           {
             role: "system",
-            content: "You are a medical AI expert who specializes in summarizing news and research about artificial intelligence in medicine, radiology, and cardiovascular imaging. Provide clear, concise summaries that highlight the most important developments."
+            content: "You are a medical AI expert who specializes in summarizing news and research about artificial intelligence in medicine, radiology, and cardiovascular imaging. Provide clear, concise summaries that highlight the most important developments even when limited information is available."
           },
           {
             role: "user",
@@ -42,7 +54,7 @@ Focus on the key findings, innovations, and implications for the medical field. 
       console.error('Error summarizing article:', error);
       return {
         ...article,
-        summary: article.description || 'Summary not available',
+        summary: `Summary based on title: "${article.title}"`,
         summarizedAt: new Date().toISOString()
       };
     }
@@ -92,25 +104,29 @@ Focus on the key findings, innovations, and implications for the medical field. 
         if (topicArticles.length > 0) {
           reportContent += `## ${topic.charAt(0).toUpperCase() + topic.slice(1)}\n\n`;
           
-          const topicPrompt = `Based on these ${topicArticles.length} articles about AI in ${topic}, provide a 3-4 sentence overview of the key trends and developments this week:\n\n${topicArticles.map(a => `- ${a.title}: ${a.summary || a.description}`).join('\n')}`;
-          
-          const topicResponse = await this.openai.chat.completions.create({
-            model: "gpt-3.5-turbo",
-            messages: [
-              {
-                role: "system",
-                content: "You are a medical AI expert providing weekly insights on AI developments in medicine."
-              },
-              {
-                role: "user",
-                content: topicPrompt
-              }
-            ],
-            max_tokens: 200,
-            temperature: 0.3,
-          });
+          if (this.openai) {
+            const topicPrompt = `Based on these ${topicArticles.length} articles about AI in ${topic}, provide a 3-4 sentence overview of the key trends and developments this week:\n\n${topicArticles.map(a => `- ${a.title}: ${a.summary || a.description}`).join('\n')}`;
+            
+            const topicResponse = await this.openai.chat.completions.create({
+              model: "gpt-3.5-turbo",
+              messages: [
+                {
+                  role: "system",
+                  content: "You are a medical AI expert providing weekly insights on AI developments in medicine."
+                },
+                {
+                  role: "user",
+                  content: topicPrompt
+                }
+              ],
+              max_tokens: 200,
+              temperature: 0.3,
+            });
 
-          reportContent += `${topicResponse.choices[0].message.content.trim()}\n\n`;
+            reportContent += `${topicResponse.choices[0].message.content.trim()}\n\n`;
+          } else {
+            reportContent += `This week, ${topicArticles.length} articles were found covering AI developments in ${topic}. Key areas include recent advancements in medical AI applications and research. For detailed AI-powered analysis, please configure a valid OpenAI API key.\n\n`;
+          }
           
           // Add top 3 articles for this topic
           const topArticles = topicArticles.slice(0, 3);
@@ -124,26 +140,31 @@ Focus on the key findings, innovations, and implications for the medical field. 
       }
 
       // Add overall summary
-      const overallPrompt = `Based on all ${articles.length} articles across medicine, radiology, and cardiovascular imaging, what are the 3 most significant AI developments this week? Provide a brief executive summary.`;
-      
-      const overallResponse = await this.openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content: "You are a strategic analyst providing executive summaries of AI developments in healthcare."
-          },
-          {
-            role: "user",
-            content: overallPrompt
-          }
-        ],
-        max_tokens: 250,
-        temperature: 0.3,
-      });
+      if (this.openai) {
+        const overallPrompt = `Based on all ${articles.length} articles across medicine, radiology, and cardiovascular imaging, what are the 3 most significant AI developments this week? Provide a brief executive summary.`;
+        
+        const overallResponse = await this.openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
+          messages: [
+            {
+              role: "system",
+              content: "You are a strategic analyst providing executive summaries of AI developments in healthcare."
+            },
+            {
+              role: "user",
+              content: overallPrompt
+            }
+          ],
+          max_tokens: 250,
+          temperature: 0.3,
+        });
 
-      reportContent += `## Executive Summary\n\n`;
-      reportContent += `${overallResponse.choices[0].message.content.trim()}\n`;
+        reportContent += `## Executive Summary\n\n`;
+        reportContent += `${overallResponse.choices[0].message.content.trim()}\n`;
+      } else {
+        reportContent += `## Executive Summary\n\n`;
+        reportContent += `This week's analysis covers ${articles.length} articles across AI in medicine, radiology, and cardiovascular imaging. The field continues to show rapid development with numerous research publications and clinical applications. For AI-powered insights and analysis, please configure a valid OpenAI API key in your environment variables.\n`;
+      }
 
       return {
         report: reportContent,
